@@ -136,81 +136,25 @@ const deletePlan = async (req, res) => {
     }
 };
 
-/**
- * PUT /v1/plans/:id
- * Full replace. Validation enforced. Requires If-Match header (conditional write).
- * If resource does not exist and server policy allows create, controller will respond 201.
- */
-const updatePlan = async (req, res) => {
-    if (!req.is('application/json')) {
-        return res.status(415).json({ error: 'unsupported_media_type', message: 'Expected application/json' });
-    }
 
-    const id = req.params.id;
-    const payload = req.body;
-
-    // Ensure payload.objectId (if present) matches URL id
-    if (payload.objectId && payload.objectId !== id) {
-        return res.status(400).json({ error: 'objectId_mismatch', message: 'objectId in body must match URL id' });
-    }
-    payload.objectId = id;
-
-    const valid = validator.validate(payload);
-    if (!valid) {
-        return res.status(400).json({
-            error: 'validation_failed',
-            details: formatAjvErrors(validator.errors())
-        });
-    }
-
-    // Enforce conditional write for safety
-    const ifMatch = req.header('If-Match');
-    if (!ifMatch) {
-        return res.status(428).json({ error: 'precondition_required', message: 'If-Match header required for update' });
-    }
-
-    try {
-        // replacePlan should atomically check If-Match and update (throws E_PRECONDITION on mismatch)
-        const result = await planService.replacePlan(id, payload, ifMatch);
-        // result: { id, document, etag, lastModified, created }
-        const status = result.created ? 201 : 200;
-        return res.status(status)
-            .set('ETag', result.etag)
-            .set('Last-Modified', result.lastModified)
-            .json(result.document);
-    } catch (err) {
-        if (err && err.code === 'E_PRECONDITION') {
-            return res.status(412).json({ error: 'etag_mismatch', message: 'Resource has been modified', currentEtag: err.currentEtag });
-        }
-        if (err && err.code === 'E_NOT_FOUND') {
-            return res.status(404).json({ error: 'not_found' });
-        }
-        console.error('updatePlan error:', err);
-        return res.status(500).json({ error: 'server_error' });
-    }
-};
 
 /**
  * PATCH /v1/plans/:id
  * Partial merge / JSON Merge Patch support. Requires If-Match header (conditional patch).
- * Uses planService.patchPlan which must do an atomic CAS.
+ * Uses planService.patchPlan which does an atomic CAS and validates merged result.
  */
 const patchPlan = async (req, res) => {
     if (!req.is('application/json')) {
         return res.status(415).json({ error: 'unsupported_media_type', message: 'Expected application/json' });
     }
 
-    const payload = req.body;
-    const valid = validator.validate(payload);
-    if (!valid) {
-        return res.status(400).json({
-            error: 'validation_failed',
-            details: formatAjvErrors(validator.errors())
-        });
-    }
-
     const id = req.params.id;
     const patch = req.body;
+
+    // Validate patch is not empty
+    if (!patch || Object.keys(patch).length === 0) {
+        return res.status(400).json({ error: 'empty_patch', message: 'Patch body cannot be empty' });
+    }
 
     // Prevent changing objectId
     if (patch.objectId && patch.objectId !== id) {
@@ -226,6 +170,16 @@ const patchPlan = async (req, res) => {
     try {
         const result = await planService.patchPlan(id, patch, ifMatch);
         if (!result) return res.status(404).json({ error: 'not_found' });
+
+        // Validate merged document
+        const valid = validator.validate(result.document);
+        if (!valid) {
+            return res.status(400).json({
+                error: 'validation_failed',
+                message: 'Merged document failed validation',
+                details: formatAjvErrors(validator.errors())
+            });
+        }
 
         return res.status(200)
             .set('ETag', result.etag)
@@ -247,6 +201,5 @@ module.exports = {
     createPlan,
     getPlan,
     deletePlan,
-    updatePlan,
     patchPlan
 };

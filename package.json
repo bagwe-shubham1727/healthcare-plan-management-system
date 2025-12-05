@@ -1,19 +1,32 @@
 {
-  "name": "first-demo",
-  "version": "1.0.0",
-  "description": "",
+  "name": "healthcare-plan-management-system",
+  "version": "2.0.0",
+  "description": "Healthcare Plan Management System with Elasticsearch Parent-Child Indexing and RabbitMQ Queueing",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "worker": "node workers/indexingWorker.js",
+    "worker:dev": "nodemon workers/indexingWorker.js",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
-  "keywords": [],
+  "keywords": [
+    "healthcare",
+    "elasticsearch",
+    "parent-child",
+    "rabbitmq",
+    "redis",
+    "rest-api"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@elastic/elasticsearch": "^8.11.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "deepmerge": "^4.3.1",
+    "amqplib": "^0.10.3",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "google-auth-library": "^10.5.0",

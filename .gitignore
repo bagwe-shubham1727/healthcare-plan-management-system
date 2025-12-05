@@ -31,6 +31,10 @@ build/
 # Coverage
 coverage/
 
+# Docker volumes (if stored locally)
+docker-data/
+
 # Misc
 *.tmp
 *.temp
+package-lock.json
